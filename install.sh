@@ -78,7 +78,7 @@ def port(value):
 def key(value):
     if not re.match(r'^[A-Za-z0-9_-]{43}$',value):
         raise ValueError('Invalid X25519 key')
-    if len(base64.urlsafe_b64decode(value+'='))!=32:
+    if len(base64.urlsafe_b64decode(value.encode('ascii')+b'='))!=32:
         raise ValueError('Invalid X25519 key length')
     return value
 
