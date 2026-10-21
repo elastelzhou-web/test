@@ -329,7 +329,7 @@ test_proxy() {
 }
 choose_target() {
   local name ip test_port candidates
-  candidates="${SNI:-www.microsoft.com www.amazon.com dl.google.com www.bing.com}"
+  candidates="${SNI:-www.amazon.com dl.google.com www.cloudflare.com}"
   for name in $candidates; do
     helper hostname "$name" >/dev/null || return 1
     say "Testing REALITY target: $name"

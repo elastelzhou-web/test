@@ -33,6 +33,9 @@ bash <(curl -fsSL https://raw.githubusercontent.com/elastelzhou-web/test/main/in
 
 安装时的服务器自测验证该 VPS 上的核心、配置、握手目标与出站链路。客户端所在网络到 VPS 的公网路径、服务商防火墙和 OpenAI 对出口 IP 的限制仍需客户端验证；脚本不会把这些未测项目标成通过。
 
+
+默认候选为 Amazon、Google 下载站与 Cloudflare，并逐个通过真实代理验证后才采用。Microsoft 未列入默认候选：Xray 26.3.27 存在特定 Microsoft 证书记录超过 REALITY 内部上限的已知握手问题，普通 TLS 探测通过并不代表 REALITY 可用。参考：https://github.com/XTLS/Xray-core/issues/6356
+
 ## 参考
 
 - https://github.com/XTLS/Xray-install
