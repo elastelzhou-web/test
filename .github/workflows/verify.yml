@@ -1,0 +1,56 @@
+name: Verify bwh45 installer
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Fetch exact source commit
+        env:
+          SOURCE_SHA: '${{ github.sha }}'
+        run: |
+          git init .
+          git remote add origin https://github.com/elastelzhou-web/test.git
+          git fetch --depth=1 origin "$SOURCE_SHA"
+          git checkout --detach FETCH_HEAD
+      - name: Syntax and regression tests
+        run: |
+          bash -n install.sh tests/test.sh tests/network.sh
+          bash tests/test.sh
+      - name: Real Xray REALITY proxy tests
+        run: bash tests/network.sh
+      - name: Actual systemd installation, repeated check, and removal
+        run: |
+          sudo bash install.sh > /tmp/bwh45-ci-install.log 2>&1 || {
+            awk '!/^(UUID:|PublicKey|ShortId:|vless:)/' /tmp/bwh45-ci-install.log
+            exit 1
+          }
+          sudo bash install.sh --check > /tmp/bwh45-ci-check.log 2>&1 || {
+            awk '!/^(UUID:|PublicKey|ShortId:|vless:)/' /tmp/bwh45-ci-check.log
+            exit 1
+          }
+          sudo bash install.sh --uninstall
+          test ! -e /etc/bwh45-reality
+          test ! -e /usr/local/lib/bwh45-reality
+          echo "PASS: actual systemd install, check, and uninstall"
+  centos7:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Fetch exact source commit
+        env:
+          SOURCE_SHA: '${{ github.sha }}'
+        run: |
+          git init .
+          git remote add origin https://github.com/elastelzhou-web/test.git
+          git fetch --depth=1 origin "$SOURCE_SHA"
+          git checkout --detach FETCH_HEAD
+      - name: Bash 4.2, Python 2.7, old curl, and actual proxy traffic
+        run: |
+          docker run --rm -v "$PWD:/repo:ro" -w /repo quay.io/centos/centos:7 \
+            bash -c 'bash tests/test.sh && bash tests/network.sh'

@@ -42,3 +42,5 @@ bash <(curl -fsSL https://raw.githubusercontent.com/elastelzhou-web/test/main/in
 - https://github.com/skylink9119/skybyte-xray-manager/tree/v0.1.12
 
 本项目为独立实现，仅参考上述项目的配置与操作方式；不复制它们的安装器源码。
+
+用户提供的补充参考：https://github.com/cholf5/random/issues/38 （其 Ubuntu 系统优化步骤未直接移植到 CentOS 7）。
