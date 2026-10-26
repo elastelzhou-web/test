@@ -271,6 +271,7 @@ def serve_share(path):
     proto=getattr(ssl,'PROTOCOL_TLS_SERVER',getattr(ssl,'PROTOCOL_TLS',ssl.PROTOCOL_SSLv23))
     context=ssl.SSLContext(proto)
     context.options|=getattr(ssl,'OP_NO_TLSv1',0)|getattr(ssl,'OP_NO_TLSv1_1',0)
+    if hasattr(context,'set_ecdh_curve'): context.set_ecdh_curve('prime256v1')
     context.load_cert_chain(m['cert'],m['key'])
     class Server(ThreadingMixIn,HTTPServer):
         daemon_threads=True
