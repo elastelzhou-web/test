@@ -29,8 +29,8 @@ assert c['outbounds'][0]['protocol']=='vless'
 PY
 printf 'GET /%s/client.json HTTP/1.0\r\nHost: 127.0.0.1\r\n\r\n' "$token" |
   timeout 5 openssl s_client -quiet -tls1_2 -cipher ECDHE-RSA-AES128-GCM-SHA256 \
-    -connect "127.0.0.1:$number" -CAfile "$BASE/share-tls/ca.pem" > "$WORK/ecdhe-response" 2>"$WORK/ecdhe-log"
-awk '/^HTTP\/1.0 200/{ok=1}END{exit !ok}' "$WORK/ecdhe-response"
+    -verify_return_error -connect "127.0.0.1:$number" -CAfile "$BASE/share-tls/ca.pem" > "$WORK/ecdhe-response" 2>"$WORK/ecdhe-log" || true
+awk '/^HTTP\/1.0 200/{ok=1}END{exit !ok}' "$WORK/ecdhe-response" || { cat "$WORK/ecdhe-log" >&2;die 'Verified ECDHE HTTPS request failed'; }
 sleep 9
 if kill -0 "$SERVER_PID" 2>/dev/null;then die 'Expired sharing server remained running';fi
 wait "$SERVER_PID"
