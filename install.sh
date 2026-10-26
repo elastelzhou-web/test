@@ -23,6 +23,7 @@ SHARE_UNIT=/etc/systemd/system/bwh45-reality-share.service
 SHARE_SERVICE=bwh45-reality-share.service
 REPO_RAW=https://raw.githubusercontent.com/elastelzhou-web/test
 CLI_CREATED=0
+TX_BACKUP= TX_RUNNING=0 TX_CORE=0
 PORT=${PORT:-443}
 FINGERPRINT=${FINGERPRINT:-chrome}
 WORK= PY= XRAY= SERVER_PID= CLIENT_PID= OWNED=0 COMMITTED=0
@@ -274,6 +275,7 @@ def serve_share(path):
     class Server(ThreadingMixIn,HTTPServer):
         daemon_threads=True
         allow_reuse_address=True
+        def handle_error(self,*args): pass
         def get_request(self):
             sock,addr=self.socket.accept();sock.settimeout(5)
             return context.wrap_socket(sock,server_side=True,do_handshake_on_connect=False),addr
@@ -496,6 +498,18 @@ cleanup() {
   local rc=$?
   trap - EXIT INT TERM
   stop_pair
+  if [[ -n "$TX_BACKUP" && -d "$TX_BACKUP/state" ]];then
+    say "Restoring the previous node state from $TX_BACKUP" >&2
+    cp -a -- "$TX_BACKUP/state/." "$BASE/" || true
+    if [[ "$TX_CORE" == 1 && -f "$TX_BACKUP/xray" ]];then
+      install -m 700 "$TX_BACKUP/xray" "$LIB/.xray-rollback" &&
+        mv -f -- "$LIB/.xray-rollback" "$BIN" || true
+    fi
+    if [[ "$TX_RUNNING" == 1 ]];then systemctl restart "$SERVICE" >&2 || true
+    else systemctl stop "$SERVICE" >/dev/null 2>&1 || true;fi
+    undo_firewall
+    TX_BACKUP=
+  fi
   if [[ "$OWNED" == 1 && "$COMMITTED" == 0 ]]; then
     say 'Rolling back this incomplete installation.' >&2
     systemctl stop "$SERVICE" >/dev/null 2>&1 || true
@@ -810,6 +824,7 @@ SHARE_UNIT=/etc/systemd/system/bwh45-reality-share.service
 SHARE_SERVICE=bwh45-reality-share.service
 REPO_RAW=https://raw.githubusercontent.com/elastelzhou-web/test
 CLI_CREATED=0
+TX_BACKUP= TX_RUNNING=0 TX_CORE=0
 PORT=${PORT:-443}
 FINGERPRINT=${FINGERPRINT:-chrome}
 WORK= PY= XRAY= SERVER_PID= CLIENT_PID= OWNED=0 COMMITTED=0
@@ -969,13 +984,15 @@ apply_state() {
   if [[ "$newp" != "$oldp" ]] && port_busy "$newp"; then die "TCP $newp is occupied."; fi
   if [[ $(helper ss-field "$candidate" enabled) == 1 ]]; then
     ssp=$(helper ss-field "$candidate" port)
-    oldss=$(helper ss-field "$STATE" port 2>/dev/null || true)
+    oldss=
+    if [[ $(helper ss-field "$STATE" enabled) == 1 ]];then oldss=$(helper ss-field "$STATE" port);fi
     if [[ "$ssp" != "$oldss" ]] && port_busy "$ssp"; then die "SS TCP $ssp is occupied."; fi
     if [[ "$ssp" != "$oldss" ]] && ss -lnu | awk -v p=":$ssp$" 'NR>1 && $4~p{f=1}END{exit !f}'; then die "SS UDP $ssp is occupied."; fi
   fi
   preflight_state "$candidate" || die 'Candidate failed proxy tests; current configuration was preserved.'
   backup=$(backup_node)
   systemctl is-active --quiet "$SERVICE" && active=1 || true
+  TX_BACKUP=$backup;TX_RUNNING=$active;TX_CORE=0
   firewall_open "$newp" tcp || { undo_firewall; die 'Firewall change failed; node configuration preserved.'; }
   if [[ $(helper ss-field "$candidate" enabled) == 1 ]]; then
     firewall_open "$ssp" tcp && firewall_open "$ssp" udp || { undo_firewall; die 'SS firewall change failed.'; }
@@ -990,6 +1007,7 @@ apply_state() {
   fi
   export_node
   systemctl stop "$SHARE_SERVICE" >/dev/null 2>&1 || true
+  TX_BACKUP=
   say "Configuration applied. Backup: $backup"
   [[ "$active" == 1 ]] || say 'The service remains stopped.'
 }
@@ -1191,6 +1209,7 @@ update_core() {
   backup=$(backup_node)
   cp -p -- "$BIN" "$backup/xray"
   systemctl is-active --quiet "$SERVICE" && active=1 || true
+  TX_BACKUP=$backup;TX_RUNNING=$active;TX_CORE=1
   install -m 700 "$XRAY" "$LIB/.xray-new"
   mv -f -- "$LIB/.xray-new" "$BIN"
   XRAY=$BIN
@@ -1202,6 +1221,7 @@ update_core() {
   helper core-version "$STATE" "$NEW_CORE" > "$WORK/new-state.json"
   install -m 600 "$WORK/new-state.json" "$STATE"
   export_node
+  TX_BACKUP=
   say "Core updated to $NEW_CORE. Node credentials preserved. Backup: $backup"
 }
 update_manager() {

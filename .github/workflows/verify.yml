@@ -23,6 +23,7 @@ jobs:
           bash -n install.sh tests/*.sh
           bash tests/test.sh
           bash tests/manager.sh
+          bash tests/share.sh
           python3 - <<'PY'
           import hashlib,json
           m=json.load(open('manifest.json'))
@@ -51,4 +52,4 @@ jobs:
       - name: Bash 4.2 / Python 2.7 manager, QR and real REALITY/SS traffic
         run: |
           docker run --rm -v "$PWD:/repo:ro" -w /repo quay.io/centos/centos:7 \
-            bash -c 'bash tests/test.sh && bash tests/manager.sh && bash tests/network.sh'
+            bash -c 'bash tests/test.sh && bash tests/manager.sh && bash tests/share.sh && bash tests/network.sh'
