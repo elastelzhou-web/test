@@ -22,4 +22,7 @@ with open(sys.argv[2],'w') as f: json.dump(s,f)
 PY
 test_port=$(helper free-port)
 test_proxy "$WORK/ios-state.json" "$test_port" 1
+helper ss-patch "$WORK/state.json" on 8388 2022-blake3-aes-128-gcm '' > "$WORK/ss.json"
+test_port=$(helper free-port)
+ss_proxy_test "$WORK/ss.json" "$test_port" 1
 printf 'PASS: actual official Xray REALITY/Vision end-to-end with chrome and ios (%s)\n' "$("$PY" --version 2>&1)"

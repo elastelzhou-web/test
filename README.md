@@ -1,49 +1,86 @@
-# bwh45 REALITY installer
+# CentOS 7 Xray / REALITY installer and v2ray manager
 
-专用于 bwh45 的 Linux x86_64 / CentOS 7 安装脚本。协议为 VLESS + TCP + REALITY + xtls-rprx-vision。使用官方 Xray v26.3.27，固定并核对官方发布包 SHA256。
+Version 3.0.0. Supports Linux x86_64 and systemd, including CentOS 7 / Bash 4.2 / Python 2.7. The core is Xray; the command name is v2ray for familiar administration.
 
-## 安装
-
-先停止或卸载占用 TCP 443 的旧代理/Caddy。在 VPS 的 root 终端执行：
+## Install or upgrade an existing v2 installation
 
 ~~~bash
 bash <(curl -fsSL https://raw.githubusercontent.com/elastelzhou-web/test/main/install.sh)
 ~~~
 
-脚本使用当前 VPS 的公网 IPv4 导出节点，自动尝试候选 REALITY 握手目标；生成独立 UUID、密钥和 ShortId。在写入服务前运行临时 REALITY 服务端/客户端进行真实 HTTPS 代理测试；启动正式 systemd 服务后，再通过正式入站重复测试。只有这些检查通过才报告安装成功。主机防火墙仅添加节点 TCP 端口规则。
+An existing installation created by this repository is upgraded in place. UUID, REALITY private/public keys, ShortId, selected target and core are preserved. A different program's v2ray command is never silently overwritten. The immutable v2 installer at commit 0540b951e0c9d645ce3cbf9f4271e3d296e87524 remains unchanged.
 
-CentOS 7 使用已有 curl、Python 2.7（或 Python 3）、iproute、coreutils 和 systemd，不依赖 APT、不运行失效的 yum 仓库、不用旧系统 OpenSSL 实现 TLS 1.3 探测。已有其他服务和 SSH 端口保持原配置。
+Fresh installations use official Xray v26.3.27 with its pinned official SHA256, detect the current public IPv4, select a target by verified TLS 1.3 plus actual REALITY/Vision HTTPS requests, and check the actual systemd service again. The target defaults exclude Microsoft's documented incompatible certificate-record shape: https://github.com/XTLS/Xray-core/issues/6356
 
-## 使用
+## Commands (run as root)
 
-安装成功后将终端输出的完整 VLESS 链接导入 v2rayN。连接信息与客户端配置在 /root/bwh45-reality-client.txt 和 /etc/bwh45-reality/client.json；文件均仅 root 可读。服务名称 bwh45-reality.service。
+| Command | Behavior |
+| --- | --- |
+| v2ray info | Show REALITY connection information and VLESS import URI |
+| v2ray config | Edit port, address, target/SNI, fingerprint, name, UUID, or rotate keys |
+| v2ray link | Temporary HTTPS link to complete Xray client JSON |
+| v2ray infolink | Temporary HTTPS link to client information |
+| v2ray qr | Temporary HTTPS REALITY QR image link |
+| v2ray ss | Enable, edit, or disable Shadowsocks; disabled until requested |
+| v2ray ssinfo | Show SS information and SIP002 URI |
+| v2ray ssqr | Temporary HTTPS SS QR image link |
+| v2ray status | Display service state |
+| v2ray start / stop / restart | Control the service; start/restart perform proxy checks |
+| v2ray log | Last 50 journal lines; append -f to follow |
+| v2ray update | Download and verify the official stable Xray core, test, then update; rollback on restart failure |
+| v2ray update.sh | Verify this repository's version/hash manifest, then update the manager only |
+| v2ray uninstall | Back up configuration and remove the node, sharing service and owned manager |
+| v2ray check | Actual proxy self-test |
+
+All requested commands are implemented. They manage Xray and do not install the separate V2Fly core.
+
+Configuration changes are validated with the actual core and a temporary proxy before application. A failed restart restores the previous configuration. Previously stopped services remain stopped. Core/script updates preserve node credentials. Root-only backups are retained under /root/bwh45-reality-backup.*. Existing firewall rules are preserved on uninstall; the manager never flushes rules or changes SSH.
+
+Examples:
 
 ~~~bash
-bash <(curl -fsSL https://raw.githubusercontent.com/elastelzhou-web/test/main/install.sh) --check
-bash <(curl -fsSL https://raw.githubusercontent.com/elastelzhou-web/test/main/install.sh) --uninstall
+v2ray config --port 443 --fingerprint chrome --name my-node
+v2ray ss --enable --port 8388
+v2ray ssinfo
+v2ray ss --disable
+v2ray update 26.3.27
 ~~~
 
-重复运行安装会复用已有凭据并检查连接，不会生成第二套节点。卸载会保留备份。
+For passwords use the hidden interactive prompt or --password-stdin; do not put secrets in command arguments. SS defaults to 2022-blake3-aes-128-gcm, with TCP and native UDP; aes-256-gcm and chacha20-ietf-poly1305 are also supported. SS2022 links follow SIP002's required percent-encoded userinfo rather than Base64URL.
 
-可选环境变量：SERVER_ADDRESS（连接地址，默认实际公网 IPv4）、SNI（固定握手域名，默认自动选择）、PORT（默认 443）、FINGERPRINT（默认 chrome，可选 ios）。
+## HTTPS sharing and QR codes
 
-## 验证范围
+Sharing commands generate QR SVG images locally. Node information is not sent to an external QR website or uploaded to GitHub.
 
-测试将覆盖密钥格式兼容、校验和拒绝、地址/配置生成、CentOS 7 的 Bash/Python 2 兼容，以及使用真实官方 Xray 的 REALITY/Vision HTTPS 代理。测试和结果见 Actions。
+Temporary HTTPS sharing starts only when link/infolink/qr/ssqr is invoked. Defaults: port 8443, a random 192-bit URL token, and a 10-minute lifetime. Only known client export files are served. Server state, REALITY private keys, directory listings and uploads have no download endpoint. URLs and credentials are not logged. The temporary listener exits on expiry.
 
-安装时的服务器自测验证该 VPS 上的核心、配置、握手目标与出站链路。客户端所在网络到 VPS 的公网路径、服务商防火墙和 OpenAI 对出口 IP 的限制仍需客户端验证；脚本不会把这些未测项目标成通过。
+**Default certificate is self-signed.** Browsers require a certificate exception: verify the SHA256 fingerprint printed in the SSH session before accepting it. A client downloading JSON must trust that certificate. The node's REALITY listener on 443 is independent. Provider firewall must separately allow the sharing TCP port.
 
+If the openssl command is missing on CentOS 7, the sharing command installs only that dependency using GPG-checked official CentOS 7 vault packages through a temporary repository configuration; it does not rewrite the system repositories.
 
-默认候选为 Amazon、Google 下载站与 Cloudflare，并逐个通过真实代理验证后才采用。Microsoft 未列入默认候选：Xray 26.3.27 存在特定 Microsoft 证书记录超过 REALITY 内部上限的已知握手问题，普通 TLS 探测通过并不代表 REALITY 可用。参考：https://github.com/XTLS/Xray-core/issues/6356
+Optional, for browser-trusted HTTPS, supply your own certificate and corresponding hostname:
 
-## 参考
+~~~bash
+SHARE_HOST=share.example.com SHARE_CERT=/path/fullchain.pem SHARE_KEY=/path/privkey.pem v2ray link
+~~~
+
+SHARE_PORT and SHARE_TTL override the default port/lifetime (TTL 1..3600 seconds). Do not publish generated credential URLs. Local exports remain root-only in /etc/bwh45-reality/exports.
+
+## Testing
+
+Actions verifies CentOS 7 Bash/Python 2 compatibility, key-format regressions, persistent manager reconstruction, SS2022 URIs, real REALITY and SS TCP/UDP traffic. An Ubuntu systemd runner tests all commands, decodes both QR images independently, verifies HTTPS downloads/expiry/private-key isolation, simulates a failed restart to verify rollback, updates both core/manager, and migrates a real v2 installation without changing its credentials.
+
+This does not guarantee provider firewall policy, the client-to-VPS path, IP reputation, or availability of OpenAI authenticated sessions. Installation on each VPS repeats server-side proxy tests.
+
+## Sources and attribution
 
 - https://github.com/XTLS/Xray-install
 - https://github.com/XTLS/REALITY/blob/main/README.en.md
-- https://github.com/XTLS/Xray-examples/tree/main/VLESS-TCP-XTLS-Vision-REALITY
 - https://github.com/XTLS/Xray-core/releases/tag/v26.3.27
-- https://github.com/skylink9119/skybyte-xray-manager/tree/v0.1.12
+- https://xtls.github.io/config/inbounds/shadowsocks.html
+- https://shadowsocks.org/doc/sip002.html
+- User reference: https://github.com/cholf5/random/issues/38
+- Command naming reference: xyz690/v2ray and 233boy/v2ray; this is an independent implementation.
+- Vendored PyQRCode: https://github.com/mnooner256/pyqrcode at 674a77b5eaf850d063f518bd90c243ee34ad6b5d. BSD-3-Clause copyright/license retained in vendor/pyqrcode and the installed THIRD_PARTY_NOTICES.txt.
 
-本项目为独立实现，仅参考上述项目的配置与操作方式；不复制它们的安装器源码。
-
-用户提供的补充参考：https://github.com/cholf5/random/issues/38 （其 Ubuntu 系统优化步骤未直接移植到 CentOS 7）。
+No live VPS credentials are stored in this repository or CI files.

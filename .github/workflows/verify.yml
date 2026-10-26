@@ -1,4 +1,4 @@
-name: Verify bwh45 installer
+name: Verify v2ray manager
 on:
   push:
     branches: [main]
@@ -8,7 +8,7 @@ permissions:
 jobs:
   linux:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - name: Fetch exact source commit
         env:
@@ -18,29 +18,27 @@ jobs:
           git remote add origin https://github.com/elastelzhou-web/test.git
           git fetch --depth=1 origin "$SOURCE_SHA"
           git checkout --detach FETCH_HEAD
-      - name: Syntax and regression tests
+      - name: Syntax, legacy regressions, manager serialization, and QR generation
         run: |
-          bash -n install.sh tests/test.sh tests/network.sh
+          bash -n install.sh tests/*.sh
           bash tests/test.sh
-      - name: Real Xray REALITY proxy tests
+          bash tests/manager.sh
+          python3 - <<'PY'
+          import hashlib,json
+          m=json.load(open('manifest.json'))
+          assert hashlib.sha256(open('install.sh','rb').read()).hexdigest()==m['sha256']
+          PY
+      - name: Actual REALITY and Shadowsocks TCP/UDP proxy tests
         run: bash tests/network.sh
-      - name: Actual systemd installation, repeated check, and removal
+      - name: QR decoding dependencies for independent verification
         run: |
-          sudo bash install.sh > /tmp/bwh45-ci-install.log 2>&1 || {
-            awk '!/^(UUID:|PublicKey|ShortId:|vless:)/' /tmp/bwh45-ci-install.log
-            exit 1
-          }
-          sudo bash install.sh --check > /tmp/bwh45-ci-check.log 2>&1 || {
-            awk '!/^(UUID:|PublicKey|ShortId:|vless:)/' /tmp/bwh45-ci-check.log
-            exit 1
-          }
-          sudo bash install.sh --uninstall
-          test ! -e /etc/bwh45-reality
-          test ! -e /usr/local/lib/bwh45-reality
-          echo "PASS: actual systemd install, check, and uninstall"
+          sudo apt-get -qq update
+          sudo apt-get -qq install -y librsvg2-bin zbar-tools
+      - name: All management commands, safe rollback, HTTPS links, updates and v2 migration
+        run: sudo bash tests/commands.sh
   centos7:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Fetch exact source commit
         env:
@@ -50,7 +48,7 @@ jobs:
           git remote add origin https://github.com/elastelzhou-web/test.git
           git fetch --depth=1 origin "$SOURCE_SHA"
           git checkout --detach FETCH_HEAD
-      - name: Bash 4.2, Python 2.7, old curl, and actual proxy traffic
+      - name: Bash 4.2 / Python 2.7 manager, QR and real REALITY/SS traffic
         run: |
           docker run --rm -v "$PWD:/repo:ro" -w /repo quay.io/centos/centos:7 \
-            bash -c 'bash tests/test.sh && bash tests/network.sh'
+            bash -c 'bash tests/test.sh && bash tests/manager.sh && bash tests/network.sh'
