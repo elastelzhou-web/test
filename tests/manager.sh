@@ -36,6 +36,9 @@ printf '443\n' > "$WORK/value"
 helper patch "$WORK/ss" port "$WORK/value" > "$WORK/changed"
 printf '8388\n' > "$WORK/value"
 if helper patch "$WORK/ss" port "$WORK/value" >/dev/null 2>&1;then die 'Protocol port collision accepted';fi
+helper ss-patch "$WORK/ss" off '' '' '' > "$WORK/no-ss"
+helper exports "$WORK/no-ss" "$WORK/exports"
+[[ ! -e "$WORK/exports/ss-info.txt" && ! -e "$WORK/exports/ss-qr.svg" ]]
 printf 'new-server\n' > "$WORK/value"
 helper patch "$WORK/ss" name "$WORK/value" > "$WORK/named"
 helper uri "$WORK/named" | awk '/#new-server$/{ok=1}END{exit !ok}'

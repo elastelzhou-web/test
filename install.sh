@@ -47,7 +47,7 @@ find_python() {
 helper() {
  "$PY" - "$@" <<'PY_HELPER'
 from __future__ import print_function
-import base64, binascii, json, os, re, socket, struct, sys, uuid, zipfile
+import base64, binascii, hashlib, hmac, json, os, re, socket, struct, sys, uuid, zipfile
 try:
     from urllib.parse import urlencode, quote
 except ImportError:
@@ -218,6 +218,10 @@ def exports(s,folder):
         data=value.encode('utf-8')
         with open(os.path.join(folder,name),'wb') as f: f.write(data)
         os.chmod(os.path.join(folder,name),0o600)
+    if not (s.get('ss') or {}).get('enabled'):
+        for name in ('ss-client.json','ss-info.txt','ss-uri.txt','ss-qr.svg'):
+            stale=os.path.join(folder,name)
+            if os.path.isfile(stale) or os.path.islink(stale): os.unlink(stale)
     qr_file(link(s),os.path.join(folder,'qr.svg'))
     if (s.get('ss') or {}).get('enabled'): qr_file(ss_uri(s),os.path.join(folder,'ss-qr.svg'))
 
@@ -240,6 +244,11 @@ def share_meta(path):
     if not os.path.isabs(m['folder']) or os.path.islink(m['folder']): raise ValueError('Unsafe sharing folder')
     return m
 
+def share_token(m,name):
+    if name not in ('client.json','info.txt','uri.txt','qr.svg','ss-client.json','ss-info.txt','ss-uri.txt','ss-qr.svg'):
+        raise ValueError('Unknown sharing file')
+    return hmac.new(m['token'].encode('ascii'),name.encode('ascii'),hashlib.sha256).hexdigest()[:48]
+
 def serve_share(path):
     import ssl,time,threading
     try:
@@ -254,10 +263,13 @@ def serve_share(path):
         def log_message(self,*args): pass
         def do_GET(self):
             if time.time()>=m['expires']: self.send_error(410);return
-            prefix='/'+m['token']+'/'
-            name=self.path[len(prefix):] if self.path.startswith(prefix) else ''
+            parts=self.path.split('/')
+            name=parts[-1] if len(parts)==3 else ''
+            if name not in allowed: self.send_error(404);return
+            expected='/'+share_token(m,name)+'/'+name
+            equal=getattr(hmac,'compare_digest',lambda x,y:len(x)==len(y) and sum(ord(a)^ord(b) for a,b in zip(x,y))==0)
             file=os.path.join(m['folder'],name)
-            if name not in allowed or not os.path.isfile(file) or os.path.islink(file):
+            if not equal(self.path,expected) or not os.path.isfile(file) or os.path.islink(file):
                 self.send_error(404);return
             with open(file,'rb') as f: data=f.read()
             self.send_response(200)
@@ -316,6 +328,7 @@ def manager_ops(op,a):
     if op=='qr-license': print(qr_package()[1]);return
     if op=='serve-share': serve_share(a[0]);return
     if op=='udp-test': udp_test(a[0]);return
+    if op=='share-token': print(share_token(share_meta(a[0]),a[1]));return
     if op=='meta-field':
         m=share_meta(a[0])
         if a[1] not in ('token','host','port','expires','folder','cert','key'): raise ValueError('Unknown sharing field')
@@ -390,7 +403,7 @@ def manager_ops(op,a):
 
 def main():
     op=sys.argv[1]; a=sys.argv[2:]
-    if op in ('self-check','qr-license','serve-share','udp-test','meta-field','make-share','manifest','patch','ss-patch','ss-field','ss-server','ss-client','ss-uri','ss-text','exports','core-version'):
+    if op in ('self-check','qr-license','serve-share','udp-test','meta-field','share-token','make-share','manifest','patch','ss-patch','ss-field','ss-server','ss-client','ss-uri','ss-text','exports','core-version'):
         manager_ops(op,a);return
     if op=='public-ip':
         with open(a[0]) as f: data=f.read()
@@ -1197,6 +1210,7 @@ SHARE_UNIT_BODY
     done
     systemctl is-active --quiet "$SHARE_SERVICE" || { undo_firewall;die 'HTTPS sharing failed to start.'; }
   fi
+  token=$(helper share-token "$BASE/share.json" "$file")
   baseurl="https://$host:$number/$token"
   say "$baseurl/$file"
   say "Private HTTPS link; expires at Unix time $expires. Provider firewall must allow TCP $number."

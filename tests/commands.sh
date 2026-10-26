@@ -76,6 +76,10 @@ url="${url%/*}/state.json"
 host=$(python3 -c 'import sys,urllib.parse;print(urllib.parse.urlparse(sys.argv[1]).hostname)' "$url")
 code=$(curl -sS --noproxy '*' --cacert /etc/bwh45-reality/share-tls/ca.pem --connect-to "$host:8443:127.0.0.1:8443" -o /dev/null -w '%{http_code}' "$url")
 test "$code" = 404
+# A client-JSON capability must not authorize the separate SS configuration.
+url=$(awk '/^https:/{print;exit}' "$C/link.log");url="${url%/*}/ss-info.txt"
+code=$(curl -sS --noproxy '*' --cacert /etc/bwh45-reality/share-tls/ca.pem --connect-to "$host:8443:127.0.0.1:8443" -o /dev/null -w '%{http_code}' "$url")
+test "$code" = 404
 systemctl stop bwh45-reality-share.service
 log_cmd expiry env SHARE_TTL=2 v2ray link
 sleep 3

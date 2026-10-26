@@ -15,7 +15,7 @@ folder=$BASE/export
 helper exports "$WORK/state" "$folder"
 number=$(helper free-port)
 helper make-share 127.0.0.1 "$number" "$folder" 8 "$SHARE_CRT" "$SHARE_PRIV" > "$BASE/share.json"
-token=$(helper meta-field "$BASE/share.json" token)
+token=$(helper share-token "$BASE/share.json" client.json)
 helper serve-share "$BASE/share.json" > "$WORK/server.log" 2>&1 &
 SERVER_PID=$!
 wait_listener "$number" "$SERVER_PID"

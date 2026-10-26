@@ -52,7 +52,7 @@ For passwords use the hidden interactive prompt or --password-stdin; do not put 
 
 Sharing commands generate QR SVG images locally. Node information is not sent to an external QR website or uploaded to GitHub.
 
-Temporary HTTPS sharing starts only when link/infolink/qr/ssqr is invoked. Defaults: port 8443, a random 192-bit URL token, and a 10-minute lifetime. Only known client export files are served. Server state, REALITY private keys, directory listings and uploads have no download endpoint. URLs and credentials are not logged. The temporary listener exits on expiry.
+Temporary HTTPS sharing starts only when link/infolink/qr/ssqr is invoked. Defaults: port 8443, a random 192-bit URL token, and a 10-minute lifetime. Each URL authorizes only its requested file using a separate HMAC token. Changing the filename cannot retrieve a different configuration. Only known client export files are served. Server state, REALITY private keys, directory listings and uploads have no download endpoint. URLs and credentials are not logged. The temporary listener exits on expiry.
 
 **Default certificate is issued by a temporary local CA and is not browser-trusted.** Browsers require a certificate exception: verify the SHA256 fingerprint printed in the SSH session before accepting it. For curl downloads, copy /etc/bwh45-reality/share-tls/ca.pem over SSH/SFTP and use --cacert with that file. The CA signing private key is deleted after issuing the server certificate; only the leaf server key persists. The node's REALITY listener on 443 is independent. Provider firewall must separately allow the sharing TCP port.
 
