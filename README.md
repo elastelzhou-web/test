@@ -54,9 +54,9 @@ Sharing commands generate QR SVG images locally. Node information is not sent to
 
 Temporary HTTPS sharing starts only when link/infolink/qr/ssqr is invoked. Defaults: port 8443, a random 192-bit URL token, and a 10-minute lifetime. Only known client export files are served. Server state, REALITY private keys, directory listings and uploads have no download endpoint. URLs and credentials are not logged. The temporary listener exits on expiry.
 
-**Default certificate is self-signed.** Browsers require a certificate exception: verify the SHA256 fingerprint printed in the SSH session before accepting it. A client downloading JSON must trust that certificate. The node's REALITY listener on 443 is independent. Provider firewall must separately allow the sharing TCP port.
+**Default certificate is issued by a temporary local CA and is not browser-trusted.** Browsers require a certificate exception: verify the SHA256 fingerprint printed in the SSH session before accepting it. For curl downloads, copy /etc/bwh45-reality/share-tls/ca.pem over SSH/SFTP and use --cacert with that file. The CA signing private key is deleted after issuing the server certificate; only the leaf server key persists. The node's REALITY listener on 443 is independent. Provider firewall must separately allow the sharing TCP port.
 
-If the openssl command is missing on CentOS 7, the sharing command installs only that dependency using GPG-checked official CentOS 7 vault packages through a temporary repository configuration; it does not rewrite the system repositories.
+If the openssl command is missing on CentOS 7, the sharing command installs openssl and its required dependencies using GPG-checked official CentOS 7 vault packages through a temporary repository configuration; it does not rewrite the system repositories.
 
 Optional, for browser-trusted HTTPS, supply your own certificate and corresponding hostname:
 

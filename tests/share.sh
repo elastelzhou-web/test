@@ -19,8 +19,8 @@ token=$(helper meta-field "$BASE/share.json" token)
 helper serve-share "$BASE/share.json" > "$WORK/server.log" 2>&1 &
 SERVER_PID=$!
 wait_listener "$number" "$SERVER_PID"
-curl -fsS --noproxy '*' --cacert "$SHARE_CRT" "https://127.0.0.1:$number/$token/client.json" -o "$WORK/download"
-code=$(curl -sS --noproxy '*' --cacert "$SHARE_CRT" -o /dev/null -w '%{http_code}' "https://127.0.0.1:$number/$token/state.json")
+curl -fsS --noproxy '*' --cacert "$BASE/share-tls/ca.pem" "https://127.0.0.1:$number/$token/client.json" -o "$WORK/download"
+code=$(curl -sS --noproxy '*' --cacert "$BASE/share-tls/ca.pem" -o /dev/null -w '%{http_code}' "https://127.0.0.1:$number/$token/state.json")
 [[ "$code" == 404 ]]
 "$PY" - "$WORK/download" <<'PY'
 import json,sys

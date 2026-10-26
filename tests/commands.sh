@@ -44,7 +44,7 @@ for cmd in link infolink qr ssqr;do
   test -n "$url"
   # Keep the exported hostname for certificate verification while connecting locally.
   host=$(python3 -c 'import sys,urllib.parse;print(urllib.parse.urlparse(sys.argv[1]).hostname)' "$url")
-  curl -fsS --noproxy '*' --cacert /etc/bwh45-reality/share-tls/cert.pem \
+  curl -fsS --noproxy '*' --cacert /etc/bwh45-reality/share-tls/ca.pem \
     --connect-to "$host:8443:127.0.0.1:8443" "$url" -o "$C/$cmd.download"
 done
 python3 - "$C" <<'PY'
@@ -74,7 +74,7 @@ PY
 url=$(awk '/^https:/{print;exit}' "$C/link.log")
 url="${url%/*}/state.json"
 host=$(python3 -c 'import sys,urllib.parse;print(urllib.parse.urlparse(sys.argv[1]).hostname)' "$url")
-code=$(curl -sS --noproxy '*' --cacert /etc/bwh45-reality/share-tls/cert.pem --connect-to "$host:8443:127.0.0.1:8443" -o /dev/null -w '%{http_code}' "$url")
+code=$(curl -sS --noproxy '*' --cacert /etc/bwh45-reality/share-tls/ca.pem --connect-to "$host:8443:127.0.0.1:8443" -o /dev/null -w '%{http_code}' "$url")
 test "$code" = 404
 systemctl stop bwh45-reality-share.service
 log_cmd expiry env SHARE_TTL=2 v2ray link

@@ -1092,24 +1092,36 @@ VAULT_REPO
   yum -y --setopt="reposdir=$WORK/yum-repos" --disablerepo='*' --enablerepo=bwh-centos7-base,bwh-centos7-updates install openssl
 }
 sharing_certificate() {
-  local host=$1
+  local host=$1 kind=DNS
   mkdir -p -m 700 "$BASE/share-tls"
   SHARE_CRT=$BASE/share-tls/cert.pem;SHARE_PRIV=$BASE/share-tls/key.pem
   if [[ -n "${SHARE_CERT:-}" || -n "${SHARE_KEY:-}" ]]; then
     [[ -n "${SHARE_CERT:-}" && -n "${SHARE_KEY:-}" ]] || die 'Set both SHARE_CERT and SHARE_KEY.'
     install -m 600 "$SHARE_CERT" "$SHARE_CRT"
     install -m 600 "$SHARE_KEY" "$SHARE_PRIV"
+    rm -f -- "$BASE/share-tls/ca.pem"
     return
   fi
   ensure_openssl
-  if [[ -f "$SHARE_CRT" && -f "$SHARE_PRIV" && -f "$BASE/share-tls/host" &&
-        $(cat "$BASE/share-tls/host") == "$host" ]] && openssl x509 -in "$SHARE_CRT" -checkend 86400 -noout >/dev/null 2>&1; then return; fi
-  local kind=DNS
-  if [[ "$host" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then kind=IP;fi
-  cat > "$WORK/certificate.cnf" <<CERT_CONFIG
+  if [[ -f "$SHARE_CRT" && -f "$SHARE_PRIV" && -f "$BASE/share-tls/ca.pem" &&
+        -f "$BASE/share-tls/host" && $(cat "$BASE/share-tls/host") == "$host" ]] &&
+        openssl x509 -in "$SHARE_CRT" -checkend 86400 -noout >/dev/null 2>&1;then return;fi
+  [[ "$host" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] && kind=IP || true
+  cat > "$WORK/ca.cnf" <<'CA_CONFIG'
 [req]
 distinguished_name=dn
 x509_extensions=ext
+prompt=no
+[dn]
+CN=bwh45 Temporary Sharing CA
+[ext]
+basicConstraints=critical,CA:TRUE,pathlen:0
+keyUsage=critical,keyCertSign,cRLSign
+subjectKeyIdentifier=hash
+CA_CONFIG
+  cat > "$WORK/certificate.cnf" <<CERT_CONFIG
+[req]
+distinguished_name=dn
 prompt=no
 [dn]
 CN=$host
@@ -1118,11 +1130,20 @@ subjectAltName=$kind:$host
 basicConstraints=critical,CA:FALSE
 keyUsage=critical,digitalSignature,keyEncipherment
 extendedKeyUsage=serverAuth
+authorityKeyIdentifier=keyid,issuer
 CERT_CONFIG
-  openssl req -x509 -newkey rsa:2048 -nodes -days 30 -config "$WORK/certificate.cnf" \
-    -keyout "$WORK/share.key" -out "$WORK/share.crt" >"$WORK/cert.log" 2>&1
-  install -m 600 "$WORK/share.crt" "$SHARE_CRT"
+  openssl req -x509 -newkey rsa:2048 -sha256 -nodes -days 31 -config "$WORK/ca.cnf" \
+    -keyout "$WORK/ca.key" -out "$WORK/ca.crt" >"$WORK/cert.log" 2>&1
+  openssl req -new -newkey rsa:2048 -sha256 -nodes -config "$WORK/certificate.cnf" \
+    -keyout "$WORK/share.key" -out "$WORK/share.csr" >>"$WORK/cert.log" 2>&1
+  openssl x509 -req -sha256 -days 30 -in "$WORK/share.csr" -CA "$WORK/ca.crt" \
+    -CAkey "$WORK/ca.key" -CAcreateserial -extfile "$WORK/certificate.cnf" -extensions ext \
+    -out "$WORK/share.crt" >>"$WORK/cert.log" 2>&1
+  cat "$WORK/share.crt" "$WORK/ca.crt" > "$WORK/share-chain.crt"
+  install -m 600 "$WORK/share-chain.crt" "$SHARE_CRT"
   install -m 600 "$WORK/share.key" "$SHARE_PRIV"
+  install -m 600 "$WORK/ca.crt" "$BASE/share-tls/ca.pem"
+  # The CA private key is temporary and is deleted with WORK; only the server leaf key persists.
   printf '%s\n' "$host" > "$BASE/share-tls/host"
 }
 share_command() {
@@ -1136,7 +1157,7 @@ share_command() {
   if [[ $(helper ss-field "$STATE" enabled) == 1 && "$number" == "$(helper ss-field "$STATE" port)" ]]; then die 'Share port conflicts with Shadowsocks.';fi
   export_node
   now=$(date +%s)
-  if [[ -f "$BASE/share.json" ]] && systemctl is-active --quiet "$SHARE_SERVICE"; then
+  if [[ -z "${SHARE_CERT:-}" && -z "${SHARE_KEY:-}" && -f "$BASE/share.json" ]] && systemctl is-active --quiet "$SHARE_SERVICE"; then
     expires=$(helper meta-field "$BASE/share.json" expires)
     if [[ "$expires" -gt "$((now+10))" &&
           $(helper meta-field "$BASE/share.json" port) == "$number" &&
@@ -1178,7 +1199,7 @@ SHARE_UNIT_BODY
   baseurl="https://$host:$number/$token"
   say "$baseurl/$file"
   say "Private HTTPS link; expires at Unix time $expires. Provider firewall must allow TCP $number."
-  say 'Default certificate is self-signed. Verify this SHA256 fingerprint before accepting the browser certificate:'
+  say 'Default HTTPS certificate uses a local CA and is not browser-trusted. Verify this SHA256 fingerprint before accepting it:'
   if command -v openssl >/dev/null 2>&1;then openssl x509 -in "$BASE/share-tls/cert.pem" -noout -fingerprint -sha256;fi
   say "Local export: $BASE/exports/$file"
 }
