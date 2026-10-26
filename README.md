@@ -28,7 +28,7 @@ Fresh installations use official Xray v26.3.27 with its pinned official SHA256, 
 | v2ray start / stop / restart | Control the service; start/restart perform proxy checks |
 | v2ray log | Last 50 journal lines; append -f to follow |
 | v2ray update | Download and verify the official stable Xray core, test, then update; rollback on restart failure |
-| v2ray update.sh | Verify this repository's version/hash manifest, then update the manager only |
+| v2ray update.sh | Resolve one immutable repository commit, verify its version/hash manifest, then update the manager only |
 | v2ray uninstall | Back up configuration and remove the node, sharing service and owned manager |
 | v2ray check | Actual proxy self-test |
 

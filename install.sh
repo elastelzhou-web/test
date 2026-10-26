@@ -22,6 +22,7 @@ LAUNCHER=/usr/local/bin/v2ray
 SHARE_UNIT=/etc/systemd/system/bwh45-reality-share.service
 SHARE_SERVICE=bwh45-reality-share.service
 REPO_RAW=https://raw.githubusercontent.com/elastelzhou-web/test
+REPO_API=https://api.github.com/repos/elastelzhou-web/test
 CLI_CREATED=0
 TX_BACKUP= TX_RUNNING=0 TX_CORE=0
 PORT=${PORT:-443}
@@ -341,6 +342,11 @@ def manager_ops(op,a):
             'host':hostname(a[0]),'port':port(a[1]),'folder':os.path.abspath(a[2]),
             'cert':os.path.abspath(a[4]),'key':os.path.abspath(a[5]),'expires':int(time.time())+ttl})
         return
+    if op=='repo-head':
+        with open(a[0]) as f: result=json.load(f)
+        value=result['object']['sha']
+        if not re.match(r'^[0-9a-f]{40}$',value): raise ValueError('Invalid repository commit')
+        print(value);return
     if op=='manifest':
         with open(a[0]) as f: m=json.load(f)
         if not re.match(r'^\d+\.\d+\.\d+$',m['version']) or not re.match(r'^[a-f0-9]{64}$',m['sha256']):
@@ -403,7 +409,7 @@ def manager_ops(op,a):
 
 def main():
     op=sys.argv[1]; a=sys.argv[2:]
-    if op in ('self-check','qr-license','serve-share','udp-test','meta-field','share-token','make-share','manifest','patch','ss-patch','ss-field','ss-server','ss-client','ss-uri','ss-text','exports','core-version'):
+    if op in ('self-check','qr-license','serve-share','udp-test','meta-field','share-token','make-share','repo-head','manifest','patch','ss-patch','ss-field','ss-server','ss-client','ss-uri','ss-text','exports','core-version'):
         manager_ops(op,a);return
     if op=='public-ip':
         with open(a[0]) as f: data=f.read()
@@ -837,6 +843,7 @@ LAUNCHER=/usr/local/bin/v2ray
 SHARE_UNIT=/etc/systemd/system/bwh45-reality-share.service
 SHARE_SERVICE=bwh45-reality-share.service
 REPO_RAW=https://raw.githubusercontent.com/elastelzhou-web/test
+REPO_API=https://api.github.com/repos/elastelzhou-web/test
 CLI_CREATED=0
 TX_BACKUP= TX_RUNNING=0 TX_CORE=0
 PORT=${PORT:-443}
@@ -1261,15 +1268,17 @@ update_core() {
   say "Core updated to $NEW_CORE. Node credentials preserved. Backup: $backup"
 }
 update_manager() {
-  local version hash actual
-  fetch "$REPO_RAW/main/manifest.json" -o "$WORK/manifest.json"
+  local version hash actual commit
+  fetch "$REPO_API/git/ref/heads/main" -o "$WORK/repo-head.json"
+  commit=$(helper repo-head "$WORK/repo-head.json")
+  fetch "$REPO_RAW/$commit/manifest.json" -o "$WORK/manifest.json"
   read -r version hash < <(helper manifest "$WORK/manifest.json")
   if [[ "$version" == "$VERSION" ]];then say "Manager $VERSION is already current.";return;fi
   "$PY" - "$version" "$VERSION" <<'PY_VERSION'
 import sys
 assert tuple(map(int,sys.argv[1].split('.')))>tuple(map(int,sys.argv[2].split('.'))),'Manager downgrade refused'
 PY_VERSION
-  fetch "$REPO_RAW/main/install.sh" -o "$WORK/new-manager.sh"
+  fetch "$REPO_RAW/$commit/install.sh" -o "$WORK/new-manager.sh"
   actual=$(sha256sum "$WORK/new-manager.sh" | awk '{print $1}')
   [[ "$actual" == "$hash" ]] || die 'Manager SHA256 mismatch; no files were replaced.'
   bash -n "$WORK/new-manager.sh"
